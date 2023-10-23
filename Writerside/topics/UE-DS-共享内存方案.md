@@ -29,7 +29,8 @@ then write a step-by-step procedure but on a real-world example.
    ```
 
 2. Step with an image
-   ![](image.png)
+
+[//]: # (   ![]&#40;image.png&#41;)
 
 <!-- The 'src' attribute should contain the name of an image from the '/images' folder in your project -->
 
