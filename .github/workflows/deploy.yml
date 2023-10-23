@@ -50,6 +50,9 @@ jobs:
           name: algolia-indexes
           path: artifacts/${{ env.ALGOLIA_ARTIFACT }}
           retention-days: 7
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
 
   # Add the job below and artifacts/report.json on Upload documentation step above if you want to fail the build when documentation contains errors
   test:
