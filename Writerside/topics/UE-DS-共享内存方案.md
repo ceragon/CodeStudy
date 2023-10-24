@@ -1,4 +1,4 @@
-# UE DS &#20849;&#20139;&#20869;&#23384;&#26041;&#26696;
+# UE DS 内存共享方案
 
 Tutorials are learning-oriented articles that help users to go through a process and achieve a deliverable.
 Start with an introduction: for whom is this tutorial and what the reader will achieve by reading it.
@@ -30,7 +30,6 @@ then write a step-by-step procedure but on a real-world example.
 
 2. Step with an image
 
-[//]: # (   ![]&#40;image.png&#41;)
 
 <!-- The 'src' attribute should contain the name of an image from the '/images' folder in your project -->
 
