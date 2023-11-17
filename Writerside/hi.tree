@@ -4,9 +4,10 @@
 
 <instance-profile id="hi"
                  name="Ceragon 的个人空间"
-                 start-page="Default-topic.md">
+                 start-page="About-OpenJdk.md">
 
     <toc-element topic="About-OpenJdk.md"/>
+    <toc-element topic="compile-OpenJdk.md"/>
     <toc-element topic="Default-topic.md"/>
     <toc-element topic="UE-DS-ShareMemory.md"/>
 </instance-profile>
