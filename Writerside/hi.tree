@@ -9,6 +9,8 @@
     <toc-element topic="About-OpenJdk.md">
         <toc-element topic="compile-OpenJdk.md"/>
     </toc-element>
+    <toc-element topic="About-UE-DS.md">
+        <toc-element topic="UE-DS-ShareMemory.md"/>
+    </toc-element>
     <toc-element topic="Default-topic.md"/>
-    <toc-element topic="UE-DS-ShareMemory.md"/>
 </instance-profile>
