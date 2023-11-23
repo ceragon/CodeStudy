@@ -84,3 +84,46 @@ public class Continuation {
 
 ## 解析 native 方法 doYield
 
+虽然 doYield 是个 native 方法，执行的是 Jni 调用，理应在 vm 源码找到对应的 C/C++ 方法。但 vm
+为了提高执行效率，将该方法编码成了机器码。生成机器码的方法如下(x86_64)：
+
+```c++
+// sharedRuntime_x86_64.cpp
+static void gen_continuation_yield(MacroAssembler* masm,
+                                   const VMRegPair* regs,
+                                   OopMapSet* oop_maps,
+                                   int& frame_complete,
+                                   int& stack_slots,
+                                   int& compiled_entry_offset) {
+    //.............                                   
+    // r15_thread 对应的是 x86 中的 r15 寄存器，vm 用来储存当前线程对象在堆内的地址
+    // movptr 与 x86 汇编中的 move 一样，将 r15 寄存器的值复制到 c_rarg0 (rdi) 寄存器中
+    __ movptr(c_rarg0, r15_thread);
+    // rsp 寄存器是栈寄存器，记录栈顶的地址
+    // 将 rsp 寄存器的值保存到 c_rarg1 (rsi) 寄存器中
+    __ movptr(c_rarg1, rsp);
+    // 调用 vm 的方法 freeze_entry()
+    __ call_VM_leaf(Continuation::freeze_entry(), 2);
+    //............
+}
+```
+
+```c++
+static address freeze_entry = nullptr;
+address Continuation::freeze_entry() {
+    // 返回 freeze_entry 方法的地址
+    return ::freeze_entry;
+}
+```
+
+freeze_entry 的方法内容如下，可以先不去深究 JRT_BLOCK_ENTRY 这个宏的作用，关注方法内容即可。
+
+```c++
+template<typename ConfigT>
+static JRT_BLOCK_ENTRY(int, freeze(JavaThread* current, intptr_t* sp))
+    if (current->raw_cont_fastpath() > current->last_continuation()->entry_sp() || current->raw_cont_fastpath() < sp) {
+        current->set_cont_fastpath(nullptr);
+    }
+    return ConfigT::freeze(current, sp);
+JRT_END
+```
