@@ -182,13 +182,102 @@ static inline int freeze_internal(JavaThread* current, intptr_t* const sp) {
 > 在 globals.hpp 中 `develop(bool, UseContinuationFastPath, true, "Use fast-path frame walking in continuations")`
 > UseContinuationFastPath 的 默认值是 ture
 
-### continuation 的 slowPath
+## freeze 的 slowPath 流程
 
 之前看过 Continuation 的相关介绍，首次 yield 需要复制完整栈帧到堆内存中，之后由于懒加载策略的存在就不会出现全部复制的情况，所以我认为复制全部栈帧的过程对应的就是
 slowPath。优先查看 slow 是因为最好按照执行的先后顺序来查看源码，这样比较容易理解。
 
 ```c++
 NOINLINE freeze_result FreezeBase::freeze_slow() {
-    
+    //.........
+    // 栈中最后一个 java 方法的栈帧信息
+    frame f = freeze_start_frame();
+    //.........
+    frame caller;
+    // 递归冻结
+    freeze_result res = recurse_freeze(f, caller, 0, false, true);
+    if (res == freeze_ok) {
+        finish_freeze(f, caller);
+        _cont.write();
+    }
+    return res;
+}
+```
+
+### 关于 start frame {collapsible="true"}
+
+```c++
+frame FreezeBase::freeze_start_frame() {
+    // 栈中最新的帧
+    frame f = _thread->last_frame();
+    if (LIKELY(!_preempt)) {
+        // 当前抢断标记是 false
+        return freeze_start_frame_yield_stub(f);
+    }
+    // 当前正在被抢断
+    return freeze_start_frame_safepoint_stub(f);
+}
+```
+
+可以先不考虑抢断与否，看下 last_frame()
+
+```c++
+class JavaThread: public Thread {
+    frame last_frame() {
+        //............
+        return pd_last_frame();
+    }
+}
+```
+
+继续看调用
+
+```c++
+class JavaThread: public Thread {
+    // 当前java栈帧，以及状态的封装对象
+    JavaFrameAnchor _anchor; // Encapsulation of current java frame and it state
+}
+frame JavaThread::pd_last_frame() {
+    // 返回一个栈帧结构体
+    return frame(_anchor.last_Java_sp(), _anchor.last_Java_fp(), _anchor.last_Java_pc()); 
+}
+```
+
+关于 JavaFrameAnchor 的内容，接着看
+
+```c++
+class JavaFrameAnchor {
+    // 以下是官翻，但该字段的作用是栈指针的值
+    // 无论何时_last_Java_sp不为空，其他锚点字段必须有效！ 
+    // 堆栈可能不可遍历[用walkable()检查]，但值必须有效。 
+    // 分析器显然依赖于此
+    intptr_t* volatile _last_Java_sp;
+    // 以下是官翻，该字段的作用是java的指令计数器，存储下一个字节码地址
+    // 无论何时我们从Java调用本地代码，我们都不能保证组成last_Java_frame的返回地址会在一个可访问的位置，
+    // 所以从Java到本地的调用会把那个pc（或者一个足够好的pc来定位oopmap）存储在帧锚中。
+    // 由于从Java到本地的调用的帧从不被去优化，我们从不需要修补pc，所以这是可以接受的。
+    volatile  address _last_Java_pc;
+    // fp 的值和 sp 有关
+    intptr_t* volatile        _last_Java_fp;
+}
+```
+
+
+
+### recurse freeze 递归冻结
+
+```c++
+NOINLINE freeze_result FreezeBase::recurse_freeze(frame& f, frame& caller, int callee_argsize, bool callee_interpreted, bool top) {
+    if (f.is_compiled_frame()) {
+        // 已经被 jit 优化
+    } else if (f.is_interpreted_frame()) {
+        // 解释执行的帧(java帧)
+    } else if (_preempt && top && ContinuationHelper::Frame::is_stub(f.cb())) {
+        // 被优化过的帧
+        return recurse_freeze_stub_frame(f, caller);
+    } else {
+        // native 方法，
+        return freeze_pinned_native;
+    }
 }
 ```
