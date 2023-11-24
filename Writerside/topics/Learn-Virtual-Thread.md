@@ -116,14 +116,79 @@ address Continuation::freeze_entry() {
 }
 ```
 
-freeze_entry 的方法内容如下，可以先不去深究 JRT_BLOCK_ENTRY 这个宏的作用，关注方法内容即可。
+### continuation 的 freeze 流程
+
+从上面的调用可知，yield 方法的会调用 freeze（冻结） 方法，所以 vm 官方是把 yield 要做的事情抽象成了“冻结”的概念。
+freeze_entry 的方法内容如下:
+> 可以先不去深究 JRT_BLOCK_ENTRY 这个宏的作用，关注方法内容即可。
 
 ```c++
 template<typename ConfigT>
 static JRT_BLOCK_ENTRY(int, freeze(JavaThread* current, intptr_t* sp))
+    // 条件一：快速路径过小(因为栈是从高地址向低地址增长)。条件二：快速路径超过了指定路径（sp是栈顶指针）
     if (current->raw_cont_fastpath() > current->last_continuation()->entry_sp() || current->raw_cont_fastpath() < sp) {
+        // 如果不满足快速路径的条件，则设置失效
         current->set_cont_fastpath(nullptr);
     }
+    // 执行冻结
     return ConfigT::freeze(current, sp);
 JRT_END
+```
+
+> 后面肯定有逻辑会涉及到 fastpath，先跳过
+
+```c++
+class Config {
+public:
+    static int freeze(JavaThread* thread, intptr_t* const sp) {
+        // 调用了下面的静态方法
+        return freeze_internal<SelfT>(thread, sp);
+    }
+}
+```
+
+下面方法被上面的方法调用
+
+```c++
+// continuationFreezeThaw.cpp
+template<typename ConfigT>
+static inline int freeze_internal(JavaThread* current, intptr_t* const sp) {
+    ContinuationEntry* entry = current->last_continuation();
+    oop oopCont = entry->cont_oop(current);
+    //..........
+    ContinuationWrapper cont(current, oopCont);
+    //..........
+    Freeze<ConfigT> freeze(current, cont, sp);
+    //..........
+    // UseContinuationFastPath：jvm 参数是否启用快速路径,默认是 true
+    // current->cont_fastpath(): 上面的 freeze 方法涉及到了 set_cont_fastpath(nullptr)，用这个方式判断是否支持 fastpath
+    bool fast = UseContinuationFastPath && current->cont_fastpath();
+    // freeze.size_if_fast_freeze_available(): 应该是判断当前的 chunk 是否有足够的空间可以冻结
+    if (fast && freeze.size_if_fast_freeze_available() > 0) {
+        freeze.freeze_fast_existing_chunk();
+        //...........
+        return 0;
+    }
+    //...........
+    // 满足 fast 就执行 fast，否则 slow
+    freeze_result res = fast ? freeze.try_freeze_fast() : freeze.freeze_slow();
+    //..........
+    // 收尾工作
+    cont.done();
+    return res;
+}
+```
+
+> 在 globals.hpp 中 `develop(bool, UseContinuationFastPath, true, "Use fast-path frame walking in continuations")`
+> UseContinuationFastPath 的 默认值是 ture
+
+### continuation 的 slowPath
+
+之前看过 Continuation 的相关介绍，首次 yield 需要复制完整栈帧到堆内存中，之后由于懒加载策略的存在就不会出现全部复制的情况，所以我认为复制全部栈帧的过程对应的就是
+slowPath。优先查看 slow 是因为最好按照执行的先后顺序来查看源码，这样比较容易理解。
+
+```c++
+NOINLINE freeze_result FreezeBase::freeze_slow() {
+    
+}
 ```
