@@ -6,7 +6,7 @@
 如果想了解 VirtualThread 直接查看 JDK 源码即可，而 Continuation 的具体实现都在 VM 中。我想深入了解一下 Continuation 在 vm
 中的具体实现。
 
-## 例子
+## 例子 {collapsible="true"}
 
 ```Java
 public class ContinuationTest {
