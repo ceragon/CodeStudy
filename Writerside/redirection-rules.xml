@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rules SYSTEM "https://resources.jetbrains.com/writerside/1.0/redirection-rules.dtd">
+<rules>
+    <!-- format is as follows
+    <rule id="<unique id>">
+        <accepts>page.html</accepts>
+    </rule>
+    -->
+    <rule id="4695bb1d">
+        <description>Created after removal of "This is the first topic" from Ceragon 的个人空间</description>
+        <accepts>Default-topic.html</accepts>
+    </rule>
+</rules>

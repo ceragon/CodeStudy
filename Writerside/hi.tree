@@ -14,5 +14,4 @@
     <toc-element topic="About-UE-DS.md">
         <toc-element topic="UE-DS-ShareMemory.md"/>
     </toc-element>
-    <toc-element topic="Default-topic.md"/>
 </instance-profile>
