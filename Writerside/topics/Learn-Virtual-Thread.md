@@ -321,17 +321,59 @@ template<typename FKind>
 inline freeze_result FreezeBase::recurse_freeze_java_frame(const frame& f, frame& caller, int fsize, int argsize) {
     // 参数解析
     // f:
-    // caller:
+    // caller: 
     // fsize: 当前方法栈的大小
     // argsize:
     
-    // 方法栈低和 FreezeBase(组合了 Continuation 的对象)
+    // 方法栈低和 FreezeBase(组合了 Continuation 的对象)记录的栈底进行比较
+    // >= 成立就表示 f 的栈底更靠近线程的栈底
+    // 所以此条件的含义是判定是否到了 Continuation 的最后一个方法帧
     if (FKind::frame_bottom(f) >= _bottom_address - 1) {
+        // 递归结束
+        return finalize_freeze(f, caller, argsize);
     } else {
         frame senderf = sender<FKind>(f);
         // 在本文上面涉及到了 recurse_freeze 方法，现在又遇到，说明是个递归调用。
         freeze_result result = recurse_freeze(senderf, caller, argsize, FKind::interpreted, false); // recursive call
         return result;
     }
+}
+```
+
+接下来看下 finalize_freeze 这个方法
+
+```c++
+freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, int argsize_md) {
+    int argsize = argsize_md - frame::metadata_words_at_top;
+    bool empty = _cont.is_empty();
+    stackChunkOop chunk = _cont.tail();
+    //.......... 
+    _freeze_size += frame::metadata_words; // for top frame's metadata
+    int overlap = 0;
+    int unextended_sp = -1;
+    if (chunk != nullptr) {
+        unextended_sp = chunk->sp();
+        //..................
+    }
+    //.........
+    bool allocated_old_in_freeze_fast = _barriers;
+    // 一共三个条件:
+    // 1. 未知???
+    // 2. chunk 是否已经处于了被 gc 观测到的状态
+    // 3. 未知???
+    if (unextended_sp < _freeze_size || chunk->is_gc_mode() || (!allocated_old_in_freeze_fast && chunk->requires_barriers())) {
+        // 分配一个新的块，用于缓存新的栈帧
+        chunk = allocate_chunk_slow(_freeze_size);
+    } else {
+        if (chunk->is_empty()) {
+            int sp = chunk->stack_size() - argsize_md;
+            chunk->set_sp(sp);
+            chunk->set_argsize(argsize);
+        }
+    }
+    chunk->set_has_mixed_frames(true);
+    chunk->set_max_thawing_size(chunk->max_thawing_size() + _freeze_size - frame::metadata_words);
+    
+    return freeze_ok_bottom;
 }
 ```
