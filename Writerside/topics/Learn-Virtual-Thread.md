@@ -262,22 +262,76 @@ class JavaFrameAnchor {
 }
 ```
 
-
-
 ### recurse freeze 递归冻结
 
 ```c++
 NOINLINE freeze_result FreezeBase::recurse_freeze(frame& f, frame& caller, int callee_argsize, bool callee_interpreted, bool top) {
     if (f.is_compiled_frame()) {
+        //....................
         // 已经被 jit 优化
+        return recurse_freeze_compiled_frame(f, caller, callee_argsize, callee_interpreted);
     } else if (f.is_interpreted_frame()) {
+        //....................
         // 解释执行的帧(java帧)
+        return recurse_freeze_interpreted_frame(f, caller, callee_argsize, callee_interpreted);
     } else if (_preempt && top && ContinuationHelper::Frame::is_stub(f.cb())) {
         // 被优化过的帧
         return recurse_freeze_stub_frame(f, caller);
     } else {
         // native 方法，
         return freeze_pinned_native;
+    }
+}
+```
+
+此时有三个分支，分别是 jit优化后的帧，解释执行的帧，优化后的帧。而需要优先分析的帧是解释执行的帧和优化后的帧。
+
+#### 解释执行的帧
+
+```c++
+NOINLINE freeze_result FreezeBase::recurse_freeze_interpreted_frame(frame& f, frame& caller,
+                                                                    int callee_argsize /* incl. metadata */,
+                                                                    bool callee_interpreted) {
+    // 参数解析
+    // f: 当前栈帧中最后一个 java 栈帧
+    // caller: 一个栈上分配对象
+    // callee_argsize: 默认是0
+    // callee_interpreted: 在当前上下文中，是 true
+    
+    // 栈顶指的是最低的地址, 获取当q方法栈的顶部
+    intptr_t* const stack_frame_top = ContinuationHelper::InterpretedFrame::frame_top(f, callee_argsize, callee_interpreted);
+    // 获取方法方法栈的底部
+    intptr_t* const stack_frame_bottom = ContinuationHelper::InterpretedFrame::frame_bottom(f);
+    // bottom 是高地址，所以相减是正数。此处表示当前栈的空间大小是多少字节
+    const int fsize = stack_frame_bottom - stack_frame_top;
+    
+    freeze_result result = recurse_freeze_java_frame<ContinuationHelper::InterpretedFrame>(f, caller, fsize, argsize);
+    if (UNLIKELY(result > freeze_ok_bottom)) {
+        return result;
+    }
+    // ..............
+    return freeze_ok; 
+}
+```
+
+由于 recurse_freeze_java_frame 这个方法比较关键，决定了真正的返回值，所以需要重点看下。
+
+```c++
+template<typename FKind>
+inline freeze_result FreezeBase::recurse_freeze_java_frame(const frame& f, frame& caller, int fsize, int argsize) {
+    // 参数解析
+    // f:
+    // caller:
+    // fsize: 当前方法栈的大小
+    // argsize:
+    
+    // 方法栈低和 FreezeBase(组合了 Continuation 的对象)
+    if (FKind::frame_bottom(f) >= _bottom_address - 1) {
+    } else {
+        frame senderf = sender<FKind>(f);
+        // 在本文上面涉及到了 recurse_freeze 方法，现在又遇到，说明是个递归调用。
+        freeze_result result = recurse_freeze(senderf, caller, argsize, FKind::interpreted, false); // recursive call
+        return result;
     }
 }
 ```
