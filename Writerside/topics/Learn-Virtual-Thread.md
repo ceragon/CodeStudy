@@ -340,8 +340,7 @@ inline freeze_result FreezeBase::recurse_freeze_java_frame(const frame& f, frame
 }
 ```
 
-接下来看下 finalize_freeze 这个方法
-
+接下来看下 finalize_freeze 这个方法，这里涉及到了 [StackChunk](Continuation-All-Struct.md#stackchunk)
 ```c++
 freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, int argsize_md) {
     int argsize = argsize_md - frame::metadata_words_at_top;
