@@ -40,7 +40,7 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
 }	
 ```
 
-### 第二部分-卸载 World {collapsible="true"}
+### 第二部分-卸载World {collapsible="true" id="world_1"}
 
 ```c++
 bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetGame* Pending, FString& Error )
@@ -95,7 +95,7 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
 }
 ```
 
-### 第三部分-加载地图并创建新World {collapsible="true}
+### 第三部分-加载地图并创建新World {collapsible="true" id="world_2"}
 
 ```c++
 bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetGame* Pending, FString& Error )
@@ -142,13 +142,60 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
 }
 ```
 
-### 第四部分-新 World 初始化
+### 第四部分-新World初始化 {collapsible="true"}
 
 ```c++
 bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetGame* Pending, FString& Error )
 {
     // ---------- 第四部分开始 ---------------
+    WorldContext.World()->SetGameMode(URL);
+    if (Pending == NULL && (!GIsClient || URL.HasOption(TEXT("Listen"))))
+    {
+        // 开启网络监听
+        WorldContext.World()->Listen(URL);
+    }
+    //TODO: 暂不清楚
+    if (GShaderCompilingManager)
+	{
+		GShaderCompilingManager->ProcessAsyncResults(false, true);
+	}
+	// load any per-map packages
+	LoadPackagesFully(WorldContext.World(), FULLYLOAD_Map, WorldContext.World()->PersistentLevel->GetOutermost()->GetName());
+	// Make sure "always loaded" sub-levels are fully loaded
+	WorldContext.World()->FlushLevelStreaming(EFlushLevelStreamingType::Visibility);
+    // AI 系统
+	WorldContext.World()->CreateAISystem();
+    // Initialize network actors and start execution.
+    for( int32 LevelIndex=0; LevelIndex<Levels.Num(); LevelIndex++ )
+    {
+        ULevel*	const Level = Levels[LevelIndex];
+        Level->InitializeNetworkActors();
+    }
+    bStartup = true;
     
+    // Spawn server actors
+    ENetMode CurNetMode = GEngine != NULL ? GEngine->GetNetMode(this) : NM_Standalone;
+    if (CurNetMode == NM_ListenServer || CurNetMode == NM_DedicatedServer)
+    {
+        GEngine->SpawnServerActors(this);
+    }
+    
+    // Init the game mode.
+    if (AuthorityGameMode && !AuthorityGameMode->IsActorInitialized())
+    {
+        AuthorityGameMode->InitGame( FPaths::GetBaseFilename(InURL.Map), Options, Error );
+    }
+    
+    // 导航系统
+    if (NavigationSystem != nullptr)
+	{
+		NavigationSystem->OnInitializeActors();
+	}
+	// ai 系统初始化
+    if (AISystem != nullptr)
+	{
+		AISystem->InitializeActorsForPlay(bResetTime);
+	}	
 	// ---------- 第四部分结束 ---------------
 }
 ```
