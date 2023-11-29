@@ -286,7 +286,7 @@ NOINLINE freeze_result FreezeBase::recurse_freeze(frame& f, frame& caller, int c
 
 此时有三个分支，分别是 jit优化后的帧，解释执行的帧，优化后的帧。而需要优先分析的帧是解释执行的帧和优化后的帧。
 
-#### 解释执行的帧
+#### 解释执行的帧 {id=""}
 
 ```c++
 NOINLINE freeze_result FreezeBase::recurse_freeze_interpreted_frame(frame& f, frame& caller,
@@ -340,7 +340,7 @@ inline freeze_result FreezeBase::recurse_freeze_java_frame(const frame& f, frame
 }
 ```
 
-接下来看下 finalize_freeze 这个方法，这里涉及到了 [StackChunk](Continuation-All-Struct.md#stackchunk) 这个结构体。
+接下来看下 finalize_freeze 这个方法，这里涉及到了 [StackChunk](Continuation-All-Struct.md "stackchunk") 这个结构体。
 简单来说就是这个类由三部分组成，对象元信息+存储的栈数据+gc数据
 
 ```c++
@@ -381,4 +381,4 @@ freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, in
 }
 ```
 
-上面方法涉及了 [frame::metadata_words](OpenJdk-Source-Code-Struct.md#frame-栈帧)
+上面方法涉及了 [frame::metadata_words](OpenJdk-Source-Code-Struct.md "frame-栈帧")

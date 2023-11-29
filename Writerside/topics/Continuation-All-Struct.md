@@ -162,4 +162,4 @@ class oopDesc {
 
 #### argsize 字段的赋值 {collapsible="true"}
 
-该字段的赋值和 freeze 有关. [详情](Learn-Virtual-Thread.md#解释执行的帧)
+该字段的赋值和 freeze 有关. [详情](Learn-Virtual-Thread.md "解释执行的帧")
