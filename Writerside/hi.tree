@@ -16,5 +16,6 @@
     </toc-element>
     <toc-element topic="About-UE-DS.md">
         <toc-element topic="UE-DS-ShareMemory.md"/>
+        <toc-element topic="DS-Load-Map.md"/>
     </toc-element>
 </instance-profile>
