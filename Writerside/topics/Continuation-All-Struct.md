@@ -61,6 +61,7 @@ public final class StackChunk {
 ```c++
 class jdk_internal_vm_StackChunk: AllStatic {
 private:
+    //--------- klass 部分 ----------
     StackChunk* parent;
     int size;
     int sp;
@@ -69,14 +70,16 @@ private:
     uint8_t flags;
     address pc;
     int maxThawingSize;
-    //-------------------------
+    //----------- 存储栈上数据 --------
     byte stack[];
-    //-------------------------
+    //------------ gc 所需的数据 -----
     byte gc_data[];
 }
 ```
 
-#### size 字段的赋值
+#### size 字段的赋值 {collapsible="true"}
+
+通过查询 size 的引用，找到了如下赋值的位置
 
 ```c++
 class StackChunkAllocator : public MemAllocator {
@@ -107,6 +110,8 @@ public:
 }
 ```
 
+由于 size 的赋值和成员变量 _stack_size 有关，而该变量通过构造函数传入，所以查看构造函数的调用。查到了下面的方法。
+
 ```c++
 template <typename ConfigT>
 stackChunkOop Freeze<ConfigT>::allocate_chunk(size_t stack_size) {
@@ -122,6 +127,8 @@ stackChunkOop Freeze<ConfigT>::allocate_chunk(size_t stack_size) {
 }
 ```
 
+stack_size 是被 size_in_words 变量传递赋值的，继续查看 size_in_words 赋值方法，就是 instance_size() 这个方法
+
 ```c++
 inline size_t InstanceStackChunkKlass::instance_size(size_t stack_size_in_words) const {
     // StackChunk 由三部分组成
@@ -132,7 +139,9 @@ inline size_t InstanceStackChunkKlass::instance_size(size_t stack_size_in_words)
 }
 ```
 
-#### oopDesc::header_size
+可以看到实际的 stack_size 由三部分组成，StackChunk 的基础成员变量、存储栈上内容、gc数据
+
+##### oopDesc::header_size
 
 ```c++
 class oopDesc {
@@ -151,3 +160,6 @@ class oopDesc {
 }
 ```
 
+#### argsize 字段的赋值 {collapsible="true"}
+
+该字段的赋值和 freeze 有关. [详情](Learn-Virtual-Thread.md#解释执行的帧)
