@@ -12,6 +12,7 @@
         </toc-element>
         <toc-element topic="Compile-OpenJdk.md"/>
         <toc-element topic="Learning-ZGC.md"/>
+        <toc-element topic="OpenJdk-Source-Code-Struct.md"/>
     </toc-element>
     <toc-element topic="About-UE-DS.md">
         <toc-element topic="UE-DS-ShareMemory.md"/>

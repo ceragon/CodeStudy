@@ -340,13 +340,17 @@ inline freeze_result FreezeBase::recurse_freeze_java_frame(const frame& f, frame
 }
 ```
 
-接下来看下 finalize_freeze 这个方法，这里涉及到了 [StackChunk](Continuation-All-Struct.md#stackchunk)
+接下来看下 finalize_freeze 这个方法，这里涉及到了 [StackChunk](Continuation-All-Struct.md#stackchunk) 这个结构体。
+简单来说就是这个类由三部分组成，对象元信息+存储的栈数据+gc数据
+
 ```c++
 freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, int argsize_md) {
     int argsize = argsize_md - frame::metadata_words_at_top;
     bool empty = _cont.is_empty();
+    // 获取 Cont 的最后一个栈块
     stackChunkOop chunk = _cont.tail();
     //.......... 
+    
     _freeze_size += frame::metadata_words; // for top frame's metadata
     int overlap = 0;
     int unextended_sp = -1;
@@ -376,3 +380,5 @@ freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, in
     return freeze_ok_bottom;
 }
 ```
+
+上面方法涉及了 [frame::metadata_words](OpenJdk-Source-Code-Struct.md#frame-栈帧)
