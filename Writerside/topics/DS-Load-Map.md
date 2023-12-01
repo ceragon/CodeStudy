@@ -8,7 +8,7 @@
 
 回答这个问题的前提是先了解一下 DS 加载地图的过程，也就是 `UEngine::LoadMap` 这个方法。
 
-## LoadMap 解析 
+## UEngine::LoadMap 解析
 
 该方法一共有 700 行，实在太大，只能分成几部分来解析
 
@@ -199,3 +199,136 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
 	// ---------- 第四部分结束 ---------------
 }
 ```
+
+### 小结
+
+粗略分析 LoadMap 的要点如下：
+
+1. 地图加载之前会执行旧 World 的卸载流程
+2. 加载过程会创建一个新的 World 并执行初始化
+3. 地图加载有缓存机制，只有新地图会从磁盘加载到内存
+
+另外上面的 `LoadMap` 方法有一点违反直觉。正常是先创建一个 World，然后加载地图资源映射到 World 上。 它的实现是先加载地图，然后从
+Map 中获取了一个 World 对象。因此我们无法把加载的地图资源映射到任意 World 上，只能深入再看下 World 是怎样绑定到 Map
+上的，也就是 `UWorld::FindWorldInPackage` 方法。
+
+## UWorld::FindWorldInPackage 解析
+
+该方法是 World 类的静态方法
+
+```c++
+UWorld* UWorld::FindWorldInPackage(UPackage* Package)
+{
+    UWorld* RetVal = nullptr;
+	TArray<UObject*> PotentialWorlds;
+	// 从地图 Package 中获取所有的 Objects，放到 PotentialWorlds 数组中
+	GetObjectsWithPackage(Package, PotentialWorlds, false);
+	for ( auto ObjIt = PotentialWorlds.CreateConstIterator(); ObjIt; ++ObjIt )
+	{
+	    // 是否可以强转成 UWorld 类型，是的话说明是 World 对象
+		RetVal = Cast<UWorld>(*ObjIt);
+		if ( RetVal )
+		{
+			break;
+		}
+	}
+	return RetVal;
+}
+```
+
+根据 UE 官方的解释，Package 是一个打包后的资产集合。也就是说在打包的时候，地图和 World 的映射早已建立了。
+
+### 关于 GetObjectsWithPackage 的简要分析 {collapsible="true"}
+
+#### 概念
+
+先给出 GPT 的解释:
+
+---
+GetObjectsWithPackage 是一个 UE 的源码方法，它的作用是返回一个给定包中的所有对象的数组¹。你可以使用这个方法来查找一个包中的所有
+UObject，或者指定一些过滤条件，比如是否包含嵌套对象，或者排除一些特定的对象标志¹。这个方法的参数和返回值如下：
+
+- 参数：
+    - const class UPackage * Outer：要搜索的包的指针
+    - TArray < UObject * > & Results：用于存放结果的数组的引用
+    - bool bIncludeNestedObjects：是否包含嵌套对象，如果为 true，那么直接或间接以 Outer 为外部的对象都会被包含
+    - EObjectFlags ExclusionFlags：用于过滤的对象标志，比如 RF_Transient，RF_Public 等
+    - EInternalObjectFlags ExclusionInternalFlags：用于过滤的内部对象标志，比如 EInternalObjectFlags::
+      GarbageCollectionKeepFlags 等
+- 返回值：
+    - void：没有返回值，结果会存放在 Results 数组中
+
+---
+
+UE 中 Package 的概念如下：
+
+---
+
+- UE 中的包（Package）是一种用于存储和分发 Unreal 项目的内容和代码的文件格式。
+- 一个包文件通常包含一个或多个资产（Asset），比如模型，材质，纹理，声音，蓝图等2。包文件的扩展名是
+  .uasset 或 .umap，它们可以在内容浏览器（Content
+  Browser）中查看和管理。
+- 打包(Packaging)
+  是一个将项目的内容和代码转换为适合目标平台运行的格式的过程3。打包过程涉及到编译（Compile），烘焙（Cook），打包（Package），部署（Deploy）和运行（Run）等步骤3。打包的目的是为了将项目发布给用户，或者进行测试和调试3。你可以在编辑器的菜单栏中选择
+  File > Package Project > [PlatformName] 来打包你的项目1。
+
+---
+
+#### 源码解析
+
+从实际的 debug 信息来看，该方法的返回值是如下列表，里面包含一个 World 对象
+
+- [0] = {UMetaData *} 0x00000a99cf39b600 (Name="PackageMetaData")
+- [1] = {UBlueprintGeneratedClass *} 0x00000a99cf330700 (Name="CombatTestMap_C")
+- [2] = {UWorld *} 0x00000a99ce6dd800 (Name="CombatTestMap")
+- [3] = {ALevelScriptActor *} 0x00000a99cf389600 (Name="Default__CombatTestMap_C")
+- [4] = {UBlueprintGeneratedClass *} 0x00000a99cf330e00 (Name="SKEL_CombatTestMap_C")
+- [5] = {ALevelScriptActor *} 0x00000a99cf387800 (Name="Default__SKEL_CombatTestMap_C")
+
+下面方法的作用就是返回上面的列表
+
+```c++
+void GetObjectsWithPackage(const class UPackage* Package, TArray<UObject *>& Results, bool bIncludeNestedObjects, EObjectFlags ExclusionFlags, EInternalObjectFlags ExclusionInternalFlags)
+{
+	ForEachObjectWithPackage(Package, [&Results](UObject* Object)
+	{
+		Results.Add(Object);
+		return true;
+	}, bIncludeNestedObjects, ExclusionFlags, ExclusionInternalFlags);
+}
+```
+
+以下方法省略了大量代码，保留了和 Operation 相关的部分
+
+```c++
+void ForEachObjectWithPackage(const class UPackage* Package, TFunctionRef<bool(UObject*)> Operation, bool bIncludeNestedObjects, EObjectFlags ExclusionFlags, EInternalObjectFlags ExclusionInternalFlags)
+{
+    // 方法的 Operation 是个 lambda，看一下它被使用的位置
+    
+    FUObjectHashTables& ThreadHash = FUObjectHashTables::Get();
+    // 一个数组，用于存储 Object 的 hash 桶 (也就是链表或者数结构存储的 Object)
+    TArray<FHashBucket*, TInlineAllocator<1> > AllInners;
+    if (FHashBucket* Inners = ThreadHash.PackageToObjectListMap.Find(Package))
+	{
+		AllInners.Add(Inners);
+	}
+	if (FHashBucket* ObjectInners = ThreadHash.ObjectOuterMap.Find(Package))
+	{
+		AllInners.Add(ObjectInners);
+	}
+    while (AllInners.Num())
+	{
+	    FHashBucket* Inners = AllInners.Pop();
+	    for (FHashBucketIterator It(*Inners); It; ++It)
+	    {
+	        UObject *Object = static_cast<UObject*>(*It);
+	        // 调用 Lambda
+	        Operation(Object)
+	    }
+	}
+}
+```
+
+### 小结
+
+从 `UWorld::FindWorldInPackage` 方法可以看出，地图和 World 深层绑定，所以

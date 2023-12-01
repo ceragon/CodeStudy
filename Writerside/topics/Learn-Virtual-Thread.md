@@ -40,7 +40,9 @@ Second run
 Done
 ```
 
-## 解析 yield 方法的 jdk 实现
+## continuation 的 yield 流程
+
+### 解析 yield 方法的 jdk 实现
 
 > //........... 表示该部分的代码省略了，目的是为了把关注点放在关键方法上
 
@@ -82,7 +84,7 @@ public class Continuation {
 
 根据上面的方法内容得知，关键是这个 doYield 的 native 调用，在此处完成了 continuation 的挂起
 
-## 解析 native 方法 doYield
+### 解析 native 方法 doYield
 
 虽然 doYield 是个 native 方法，执行的是 Jni 调用，理应在 vm 源码找到对应的 C/C++ 方法。但 vm
 为了提高执行效率，将该方法编码成了机器码。生成机器码的方法如下(x86_64)：
@@ -116,7 +118,7 @@ address Continuation::freeze_entry() {
 }
 ```
 
-### continuation 的 freeze 流程
+#### continuation 的 freeze 流程
 
 从上面的调用可知，yield 方法的会调用 freeze（冻结） 方法，所以 vm 官方是把 yield 要做的事情抽象成了“冻结”的概念。
 freeze_entry 的方法内容如下:
@@ -182,7 +184,7 @@ static inline int freeze_internal(JavaThread* current, intptr_t* const sp) {
 > 在 globals.hpp 中 `develop(bool, UseContinuationFastPath, true, "Use fast-path frame walking in continuations")`
 > UseContinuationFastPath 的 默认值是 ture
 
-## freeze 的 slowPath 流程
+### freeze 的 slowPath 流程 {collapsible="true"}
 
 之前看过 Continuation 的相关介绍，首次 yield 需要复制完整栈帧到堆内存中，之后由于懒加载策略的存在就不会出现全部复制的情况，所以我认为复制全部栈帧的过程对应的就是
 slowPath。优先查看 slow 是因为最好按照执行的先后顺序来查看源码，这样比较容易理解。
@@ -204,7 +206,7 @@ NOINLINE freeze_result FreezeBase::freeze_slow() {
 }
 ```
 
-### 关于 start frame {collapsible="true"}
+#### 关于 start frame {collapsible="true"}
 
 ```c++
 frame FreezeBase::freeze_start_frame() {
@@ -262,7 +264,7 @@ class JavaFrameAnchor {
 }
 ```
 
-### recurse freeze 递归冻结
+#### recurse freeze 递归冻结
 
 ```c++
 NOINLINE freeze_result FreezeBase::recurse_freeze(frame& f, frame& caller, int callee_argsize, bool callee_interpreted, bool top) {
@@ -286,7 +288,7 @@ NOINLINE freeze_result FreezeBase::recurse_freeze(frame& f, frame& caller, int c
 
 此时有三个分支，分别是 jit优化后的帧，解释执行的帧，优化后的帧。而需要优先分析的帧是解释执行的帧和优化后的帧。
 
-#### 解释执行的帧 {id=""}
+##### 解释执行的帧 {id=""}
 
 ```c++
 NOINLINE freeze_result FreezeBase::recurse_freeze_interpreted_frame(frame& f, frame& caller,
@@ -382,3 +384,46 @@ freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, in
 ```
 
 上面方法涉及了 [frame::metadata_words](OpenJdk-Source-Code-Struct.md "frame-栈帧")
+
+## StackChunk 结构各部分的赋值解析
+
+由于 continuation 持有 StackChunk 链表的尾部指针，所以 continuation 的主体部分实际是由 StackChunk 构成的，因此主要分析一下
+StackChunk 的各字段赋值。
+
+结合 [StackChunk 结构体](Continuation-All-Struct.md "stackchunk") 的内容，可知它由三部分组成：
+
+- 基础部分
+- 栈帧数据
+- GC数据
+
+### 基础部分
+
+```c++
+class jdk_internal_vm_StackChunk: AllStatic {
+private:
+    //--------- klass 部分 ----------
+    StackChunk* parent;
+    int size;
+    int sp;
+    int argsize;
+    Continuation* count;
+    uint8_t flags;
+    address pc;
+    int maxThawingSize;
+    //-----------------------------
+}
+```
+
+#### 基础部分-size
+
+记录当前 Chunk 缓存的 stack 大小。
+
+> 该部分在 [StackChunk size赋值](Continuation-All-Struct.md "size 字段的赋值") 这里已经介绍过了，此处跳过。
+
+#### 基础部分-sp
+
+先简述一下线程栈的基本信息：
+
+- 每个栈帧都有自己的起始和结束地址，栈帧的结束位置一般成为栈顶（或者栈帧顶）。
+- 而 SP 寄存器被用作栈顶寄存器，记录栈顶的地址。
+- 
