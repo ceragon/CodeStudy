@@ -306,7 +306,9 @@ NOINLINE freeze_result FreezeBase::recurse_freeze_interpreted_frame(frame& f, fr
     intptr_t* const stack_frame_bottom = ContinuationHelper::InterpretedFrame::frame_bottom(f);
     // bottom 是高地址，所以相减是正数。此处表示当前栈的空间大小是多少字节
     const int fsize = stack_frame_bottom - stack_frame_top;
-    
+    // 参数大小：解释执行时，当前方法的参数大小，以及元数据固定占用的空间
+    const int argsize = ContinuationHelper::InterpretedFrame::stack_argsize(f) + frame::metadata_words_at_top;
+        
     freeze_result result = recurse_freeze_java_frame<ContinuationHelper::InterpretedFrame>(f, caller, fsize, argsize);
     if (UNLIKELY(result > freeze_ok_bottom)) {
         return result;
@@ -347,6 +349,7 @@ inline freeze_result FreezeBase::recurse_freeze_java_frame(const frame& f, frame
 
 ```c++
 freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, int argsize_md) {
+    // 方法实际参数的大小
     int argsize = argsize_md - frame::metadata_words_at_top;
     bool empty = _cont.is_empty();
     // 获取 Cont 的最后一个栈块
@@ -371,6 +374,7 @@ freeze_result FreezeBase::finalize_freeze(const frame& callee, frame& caller, in
         chunk = allocate_chunk_slow(_freeze_size);
     } else {
         if (chunk->is_empty()) {
+            // 栈的大小减去方法的参数大小+元数据大小，就等于栈顶的偏移
             int sp = chunk->stack_size() - argsize_md;
             chunk->set_sp(sp);
             chunk->set_argsize(argsize);
