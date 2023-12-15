@@ -13,5 +13,5 @@
 9. 转移根对象引用的对象
 10. 并发转移
 
-![](Learning-ZGC-huodongtu.png)
 
+![Learning-ZGC-huodongtu.png](Learning-ZGC-huodongtu.png)
